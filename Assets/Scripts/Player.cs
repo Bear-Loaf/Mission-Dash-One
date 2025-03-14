@@ -4,8 +4,8 @@ using UnityEngine.Audio;
 public class Player : MonoBehaviour
 {
     // Movement
-    public float m_baseThrust = 5f;
-    public float m_forwardThrustSpeed = 2.5f;
+    [SerializeField] private Rigidbody2D playerRigidbody;
+    public float m_forwardThrustSpeed = 5f;
     public float m_lateralThrustSpeed = 5f;
 
     // Auxiliary
@@ -21,14 +21,22 @@ public class Player : MonoBehaviour
     [SerializeField] private float p_timeLastFire;
     [SerializeField] private float p_timeNextFire;
     [SerializeField] private bool p_canFire;
-    [SerializeField] private bool p_usesVertCtrl;
+
+    private void Awake()
+    {
+        p_fireMode = 0;
+        p_sfxSource.resource = p_sfx[0];
+        p_firingCooldown = 0.250f;
+        p_canFire = true;
+        p_navSource.resource = p_sfx[10];
+    }
 
     void Start()
     {
         p_fireMode = 0;
+        p_sfxSource.resource = p_sfx[0];
         p_firingCooldown = 0.250f;
         p_canFire = true;
-        p_usesVertCtrl = false;
         p_navSource.resource = p_sfx[10];
     }
 
@@ -36,17 +44,7 @@ public class Player : MonoBehaviour
     {
         if (Input.GetMouseButton(0) && p_canFire)
         {
-            FireState();
-        }
-
-        if (Input.GetAxis("Vertical") != 0)
-        {
-            p_usesVertCtrl = true;
-        }
-
-        if (Input.GetAxis("Horizontal") != 0)
-        {
-            LateralThrust();
+            Fire(p_fireMode);
         }
 
         // Apply 'fireMode' value to access different ammo types from 'ammoTypes' array via index
@@ -64,66 +62,38 @@ public class Player : MonoBehaviour
             p_sfxSource.resource = p_sfx[p_fireMode];
             p_firingCooldown = 0.750f;
         }
-
-        // Triple forward speed for as long as 'Space' is held down
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            m_forwardThrustSpeed *= 3f;
-        }
-        if (Input.GetKeyUp(KeyCode.Space))
-        {
-            m_forwardThrustSpeed /= 3f;
-        }
     }
 
     private void FixedUpdate()
     {
-        Thrust(p_usesVertCtrl);    // Keep this function in 'FixedUpdate()' due to Unity not reading key presses while busy with 'ForwardThrust()'!
+        if (Input.GetAxis("Vertical") != 0 || Input.GetAxis("Horizontal") != 0)
+        {
+            Thrust();
+        }
         CheckCooldown();
     }
 
-    private void Thrust(bool vertCtrlActive)
+    private void Thrust()
     {
-        // TODO: Either make the world move to save maths for enemy/projectile movement OR sanitise this to run cleaner
-        if (!vertCtrlActive)
-        {
-            this.transform.position = new Vector2(this.transform.position.x, this.transform.position.y + m_baseThrust * Time.deltaTime);
-        }
-        if (vertCtrlActive)
-        {
-            this.transform.position = new Vector2(this.transform.position.x, this.transform.position.y + (m_baseThrust + m_forwardThrustSpeed) * Input.GetAxisRaw("Vertical") * Time.deltaTime);
-        }
-    }
+        float latSpeed = m_lateralThrustSpeed * Input.GetAxis("Horizontal");
+        float vertSpeed = m_forwardThrustSpeed * Input.GetAxis("Vertical");
 
-    private void LateralThrust()
-    {
-        float p_lateralImpulse = m_lateralThrustSpeed * Input.GetAxis("Horizontal");
-        this.transform.position = new Vector2(this.transform.position.x + p_lateralImpulse * Time.deltaTime, this.transform.position.y);
-    }
-
-    private void FireState()
-    {
-        /* TODO:
-        *   - Spawn according particles
-        */
-        switch (p_fireMode)
+        if (Input.GetKey(KeyCode.Space))
         {
-            case 0: // Laser Slugs
-                {
-                    Fire();
-                    break;
-                }
-            case 1: // Missiles
-                {
-                    Fire();
-                    break;
-                }
-            case 2: // Laser Beam
-                {
-                    Fire();
-                    break;
-                }
+            vertSpeed *= 1.5f;
+            playerRigidbody.MovePosition(new Vector2(playerRigidbody.position.x + latSpeed * Time.fixedDeltaTime, playerRigidbody.position.y + vertSpeed * Time.fixedDeltaTime));
+
         }
+        else if (Input.GetKeyUp(KeyCode.Space))
+        {
+            vertSpeed /= 1.5f;
+            playerRigidbody.MovePosition(new Vector2(playerRigidbody.position.x + latSpeed * Time.fixedDeltaTime, playerRigidbody.position.y + vertSpeed * Time.fixedDeltaTime));
+        }
+        else
+        {
+            playerRigidbody.MovePosition(new Vector2(playerRigidbody.position.x + latSpeed * Time.fixedDeltaTime, playerRigidbody.position.y + vertSpeed * Time.fixedDeltaTime));
+        }
+
     }
 
     private void CheckCooldown()
@@ -134,10 +104,10 @@ public class Player : MonoBehaviour
         }
     }
 
-    private void Fire()
+    private void Fire(int fireMode)
     {
-        Instantiate(p_ammoTypes[p_fireMode], p_firePoints[0].position, Quaternion.identity);
-        Instantiate(p_ammoTypes[p_fireMode], p_firePoints[1].position, Quaternion.identity);
+        Instantiate(p_ammoTypes[fireMode], p_firePoints[0].position, Quaternion.identity);
+        Instantiate(p_ammoTypes[fireMode], p_firePoints[1].position, Quaternion.identity);
         p_sfxSource.Play();
         p_canFire = false;
         p_timeLastFire = Time.time;
